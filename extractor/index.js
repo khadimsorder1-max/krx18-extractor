@@ -219,16 +219,18 @@ async function main() {
       { parse_mode: "HTML" }
     );
     console.log("\n--- Step 3: Dooplayer ---");
-    // Extract post ID — handle BOTH URL formats:
-    // Format 1: /movies/85947-slug/ (post ID in URL)
-    // Format 2: /movies/slug/ (NO post ID — fetch page and extract from data-post)
+
+    // Extract post ID — try multiple methods:
+    // 1. From URL: /movies/85947-slug/
+    // 2. From page: [data-post] attribute
+    // 3. From page: data-post in script tags
+    // 4. From page: any numeric ID in the page
     let postId = null;
     const postIdM = MOVIE_URL.match(/\/movies\/(\d+)-/);
     if (postIdM) {
       postId = postIdM[1];
       console.log(`Post ID from URL: ${postId}`);
     } else {
-      // Fetch movie page and extract data-post='XXXXX'
       console.log("No post ID in URL, fetching page to extract...");
       try {
         const page = await browser.newPage();
@@ -238,9 +240,29 @@ async function main() {
         );
         await page.goto(MOVIE_URL, { waitUntil: "domcontentloaded", timeout: 15000 });
         postId = await page.evaluate(() => {
+          // Try [data-post] first
           const el = document.querySelector("[data-post]");
-          return el ? el.getAttribute("data-post") : null;
+          if (el) return el.getAttribute("data-post");
+          // Try Twitter:DataHashtag
+          const tw = document.querySelector("[data-id]");
+          if (tw) return tw.getAttribute("data-id");
+          // Try any element with id="post-XXXX"
+          const post = document.querySelector("[id^='post-']");
+          if (post) return post.id.replace("post-", "");
+          // Try meta or link
+          return null;
         });
+        // Also try scanning script tags for post ID
+        if (!postId) {
+          postId = await page.evaluate(() => {
+            const scripts = document.querySelectorAll("script");
+            for (const s of scripts) {
+              const m = s.textContent.match(/post["']?\s*:\s*["']?(\d+)/);
+              if (m) return m[1];
+            }
+            return null;
+          });
+        }
         await page.close();
         console.log(`Post ID from page: ${postId}`);
       } catch (e) {
@@ -267,24 +289,23 @@ async function main() {
     if (procMsgId) {
       await sendResult(procMsgId, results);
     } else {
-      // No message to edit — send new message with results
       await sendNewResult(results);
     }
   } else {
+    const reasonParts = [];
+    if (!NEWSMONTH_URL) reasonParts.push("no newsmonth URL provided");
+    else reasonParts.push("newsmonth 3-click yielded no file host URLs");
+    if (postId) reasonParts.push("Dooplayer returned no stream URL");
+    else reasonParts.push("could not extract post ID for Dooplayer");
+    const reason = reasonParts.join("; ") || "unknown";
+
+    const msg = `⚠️ <b>URL বের করা যায়নি</b>\n\n` +
+      `কারণ: ${escHtml(reason)}\n\n` +
+      `🔗 <a href="${escHtml(MOVIE_URL)}">ব্রাউজারে খুলুন</a>`;
     if (procMsgId) {
-      await tgEdit(
-        procMsgId,
-        `⚠️ <b>URL বের করা যায়নি</b>\n\n` +
-        `কারণ: সব method fail করেছে\n\n` +
-        `🔗 <a href="${escHtml(MOVIE_URL)}">ব্রাউজারে খুলুন</a>`,
-        { parse_mode: "HTML" }
-      );
+      await tgEdit(procMsgId, msg, { parse_mode: "HTML" });
     } else {
-      await tgSend(
-        `⚠️ <b>URL বের করা যায়নি</b>\n\n` +
-        `🔗 <a href="${escHtml(MOVIE_URL)}">ব্রাউজারে খুলুন</a>`,
-        { parse_mode: "HTML" }
-      );
+      await tgSend(msg, { parse_mode: "HTML" });
     }
   }
   } catch (err) {
@@ -312,14 +333,14 @@ async function extractFromNewsmonth(browser, newsmonthUrl) {
 
   const urls = [];
 
-  // BUG FIX 2: Only main frame
+  // Capture ALL navigation (main frame + iframes)
   page.on("framenavigated", (frame) => {
-    if (frame !== page.mainFrame()) return;
     const url = frame.url();
     console.log(`[NAV] ${url}`);
-    if (FILE_HOST_RE.test(url) && !urls.includes(url)) urls.push(url);
+    if (FILE_HOST_RE.test(url) && !urls.includes(url)) { urls.push(url); console.log(`  → FILE HOST!`); }
   });
 
+  // Capture ALL response URLs
   page.on("response", (response) => {
     const url = response.url();
     if (FILE_HOST_RE.test(url) && !urls.includes(url)) {
@@ -328,11 +349,11 @@ async function extractFromNewsmonth(browser, newsmonthUrl) {
     }
   });
 
-  // BUG FIX 1: Named listener for cleanup
+  // Capture popups/new tabs
   const targetHandler = (target) => {
     const url = target.url();
     console.log(`[POPUP] ${url}`);
-    if (FILE_HOST_RE.test(url) && !urls.includes(url)) urls.push(url);
+    if (FILE_HOST_RE.test(url) && !urls.includes(url)) { urls.push(url); console.log(`  → FILE HOST!`); }
     target.page().then((p) => p?.close().catch(() => {})).catch(() => {});
   };
   browser.on("targetcreated", targetHandler);
@@ -342,36 +363,90 @@ async function extractFromNewsmonth(browser, newsmonthUrl) {
     await page.goto(newsmonthUrl, { waitUntil: "networkidle2", timeout: 30000 }).catch((e) => {
       console.log(`Page load: ${e.message}`);
     });
+
+    // Wait for initial page to settle
     await sleep(5000);
 
-    console.log("3-click flow...");
-    for (let i = 1; i <= 5; i++) {
-      console.log(`Click ${i}...`);
-      try { await page.mouse.click(640, 360); } catch {}
-      try { await page.click("#overlay").catch(() => {}); } catch {}
+    // Immediately scan HTML for any file host links
+    const initialHtml = await page.content().catch(() => "");
+    const initialMatches = initialHtml.match(/https?:\/\/[^"'\s<>]*(?:k2s\.cc|nitroflare|alterupload|1fichier|keep2share)[^"'\s<>]*/gi);
+    if (initialMatches) {
+      console.log(`Found ${initialMatches.length} file host URLs in initial HTML`);
+      for (const u of initialMatches) {
+        if (!urls.includes(u)) urls.push(u);
+      }
+    }
+
+    // Try multiple click strategies
+    console.log("Multi-strategy click flow...");
+    const clickPositions = [
+      { x: 640, y: 360 },   // center
+      { x: 640, y: 180 },   // top-center
+      { x: 640, y: 540 },   // bottom-center
+      { x: 320, y: 360 },   // left-center
+      { x: 960, y: 360 },   // right-center
+    ];
+    const clickSelectors = [
+      "#overlay", ".btn", "button", "a[href]", ".play-button",
+      "[onclick]", "[class*='link']", "[class*='download']",
+      "#click1", "#click2", "#click3",
+    ];
+
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      console.log(`Click attempt ${attempt}...`);
+
+      // Strategy A: Click at position
+      if (attempt <= clickPositions.length) {
+        const pos = clickPositions[(attempt - 1) % clickPositions.length];
+        try { await page.mouse.click(pos.x, pos.y); } catch {}
+      }
+
+      // Strategy B: Click known selectors
+      if (attempt <= clickSelectors.length) {
+        for (const sel of clickSelectors) {
+          try { const el = await page.$(sel); if (el) { await el.click(); break; } } catch {}
+        }
+      }
+
       await sleep(2000);
 
-      if (urls.length > 0) { console.log(`✅ Found after ${i} clicks!`); break; }
+      if (urls.length > 0) { console.log(`✅ Found after ${attempt} attempts!`); break; }
 
-      // BUG FIX 5: try-catch for cross-origin
+      // Scan page HTML for file host links
       try {
         const found = await page.evaluate(() => {
           return Array.from(document.querySelectorAll("a[href]"))
             .map((a) => a.href)
             .filter((h) => /k2s\.cc|nitroflare|alterupload|1fichier|keep2share/i.test(h));
         });
-        if (found.length > 0) { urls.push(...found); console.log(`✅ In page after ${i} clicks!`); break; }
+        if (found.length > 0) { urls.push(...found); console.log(`✅ In page after ${attempt} attempts!`); break; }
       } catch (e) {
-        console.log(`Page eval (cross-origin?): ${e.message}`);
+        console.log(`Eval: ${e.message}`);
       }
+
+      // Check iframe content
+      try {
+        const iframeUrls = await page.evaluate(() => {
+          const urls = [];
+          document.querySelectorAll("iframe").forEach((f) => {
+            if (f.src) urls.push(f.src);
+          });
+          return urls;
+        });
+        for (const u of iframeUrls) {
+          if (FILE_HOST_RE.test(u) && !urls.includes(u)) urls.push(u);
+        }
+        if (urls.length > 0) break;
+      } catch {}
     }
 
-    // BUG FIX 5: try-catch for content()
+    // Final HTML scan
     if (urls.length === 0) {
       try {
         const html = await page.content();
         const m = html.match(/https?:\/\/[^"'\s<>]*(?:k2s\.cc|nitroflare|alterupload|1fichier|keep2share)[^"'\s<>]*/gi);
         if (m) urls.push(...m);
+        console.log(`Final scan found ${m ? m.length : 0} URLs`);
       } catch (e) {
         console.log(`content() failed: ${e.message}`);
       }
@@ -381,7 +456,7 @@ async function extractFromNewsmonth(browser, newsmonthUrl) {
     for (const p of await browser.pages()) {
       try {
         const url = p.url();
-        if (FILE_HOST_RE.test(url) && !urls.includes(url)) urls.push(url);
+        if (FILE_HOST_RE.test(url) && !urls.includes(url)) { urls.push(url); console.log(`Found in browser page: ${url}`); }
       } catch {}
     }
   } finally {
@@ -389,6 +464,7 @@ async function extractFromNewsmonth(browser, newsmonthUrl) {
     try { await page.close(); } catch {}
   }
 
+  console.log(`Total unique file host URLs found: ${urls.length}`);
   return [...new Set(urls)].filter((u) => FILE_HOST_RE.test(u));
 }
 
