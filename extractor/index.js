@@ -188,11 +188,31 @@ async function main() {
       console.log(`File host URLs: ${results.downloadUrls.length}`);
     }
 
+    // ─── Step 1b: Fallback — extract download links from movie page ───
+    if (results.downloadUrls.length === 0) {
+      console.log("newsmonth gave no URLs, trying movie page directly...");
+      await tgEdit(
+        procMsgId,
+        `⏳ <b>Fallback: Movie Page</b>\n\n🔄 krx18 movie page থেকে সরাসরি link বের করা হচ্ছে...`,
+        { parse_mode: "HTML" }
+      );
+      const movieUrls = await extractFromMoviePage(browser, MOVIE_URL);
+      if (movieUrls.length > 0) {
+        console.log(`Found ${movieUrls.length} URLs from movie page`);
+        // Add only non-newsmonth URLs (we already tried newsmonth)
+        for (const u of movieUrls) {
+          if (!u.includes("newsmonth") && !results.downloadUrls.includes(u)) {
+            results.downloadUrls.push(u);
+          }
+        }
+      }
+    }
+
     // ─── Step 2: File host → streaming URL ───
     if (results.downloadUrls.length > 0) {
       await tgEdit(
         procMsgId,
-        `⏳ <b>Step ২/৩: Streaming URL</b>\n\n` +
+        `⏳ <b>Streaming URL</b>\n\n` +
         `✅ Download: ${results.downloadUrls.length} hosts\n` +
         `🔄 Streaming URL বের করা হচ্ছে...\n` +
         `⏱️ ১৫-২০s`,
@@ -211,7 +231,7 @@ async function main() {
     // ─── Step 3: Dooplayer streaming ───
     await tgEdit(
       procMsgId,
-      `⏳ <b>Step ৩/৩: JWPlayer</b>\n\n` +
+      `⏳ <b>JWPlayer</b>\n\n` +
       `✅ Download: ${results.downloadUrls.length}\n` +
       `✅ Stream: ${results.streamUrls.length}\n` +
       `🔄 Dooplayer JWPlayer...\n` +
@@ -295,6 +315,7 @@ async function main() {
     const reasonParts = [];
     if (!NEWSMONTH_URL) reasonParts.push("no newsmonth URL provided");
     else reasonParts.push("newsmonth 3-click yielded no file host URLs");
+    reasonParts.push("movie page fallback found no direct file host URLs either");
     if (postId) reasonParts.push("Dooplayer returned no stream URL");
     else reasonParts.push("could not extract post ID for Dooplayer");
     const reason = reasonParts.join("; ") || "unknown";
@@ -828,6 +849,59 @@ async function sendNewResult(results) {
     disable_web_page_preview: true,
     reply_markup: { inline_keyboard: keyboard },
   });
+}
+
+// ─── Fallback: Extract from movie page directly ─────────────────
+
+async function extractFromMoviePage(browser, movieUrl) {
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1280, height: 720 });
+  await page.setUserAgent(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+  );
+
+  const urls = [];
+  try {
+    console.log(`Fetching movie page: ${movieUrl}`);
+    await page.goto(movieUrl, { waitUntil: "networkidle2", timeout: 25000 });
+    await sleep(3000);
+
+    const found = await page.evaluate(() => {
+      const results = [];
+      const anchors = document.querySelectorAll("a[href]");
+      for (const a of anchors) {
+        const href = a.href;
+        if (
+          /(?:k2s\.cc|nitroflare|alterupload|1fichier|keep2share|rapidgator|uploadgig|turbobit)/i.test(href)
+        ) {
+          results.push(href);
+        }
+      }
+      return results;
+    });
+
+    for (const u of found) {
+      if (!urls.includes(u)) urls.push(u);
+    }
+
+    const html = await page.content().catch(() => "");
+    const allMatches = html.match(
+      /https?:\/\/[^"'\s<>]*(?:k2s\.cc|nitroflare|alterupload|1fichier|keep2share|rapidgator|uploadgig|turbobit)[^"'\s<>]*/gi
+    );
+    if (allMatches) {
+      for (const u of allMatches) {
+        if (!urls.includes(u)) urls.push(u);
+      }
+    }
+
+    console.log(`Movie page URLs found: ${urls.length}`);
+    await page.close();
+  } catch (e) {
+    console.error(`extractFromMoviePage error: ${e.message}`);
+    try { await page.close(); } catch {}
+  }
+  return urls;
 }
 
 main().catch((e) => {
