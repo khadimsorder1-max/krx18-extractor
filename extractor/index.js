@@ -133,15 +133,18 @@ async function main() {
     process.exit(1);
   }
 
-  // Send initial processing message
-  const procMsg = await tgSend(
-    `⏳ <b>ভিডিও URL বের করা হচ্ছে...</b>\n\n` +
-    `🔄 Browser খোলা হচ্ছে...\n` +
-    `⏱️ সময় লাগবে ৪০-৯০ সেকেন্ড\n\n` +
-    `<i>এই message টা আপডেট হবে</i>`,
-    { parse_mode: "HTML" }
-  );
-  const procMsgId = procMsg?.result?.message_id || MESSAGE_ID;
+  // Use Worker's message ID if available (edit Worker's "Processing..." message)
+  // Otherwise send our own processing message
+  let procMsgId = MESSAGE_ID;
+  if (!procMsgId) {
+    const procMsg = await tgSend(
+      `⏳ <b>ভিডিও URL বের করা হচ্ছে...</b>\n\n` +
+      `🔄 Browser খোলা হচ্ছে...\n` +
+      `⏱️ সময় লাগবে ৪০-৯০ সেকেন্ড`,
+      { parse_mode: "HTML" }
+    );
+    procMsgId = procMsg?.result?.message_id;
+  }
 
   // Overall timeout
   const timeoutId = setTimeout(async () => {
@@ -246,11 +249,17 @@ async function main() {
     await browser.close();
     clearTimeout(timeoutId);
 
-    // ─── Step 4: Send result ───
-    const hasAny = results.downloadUrls.length > 0 || results.streamUrls.length > 0;
-    if (hasAny) {
+  // ─── Step 4: Send result ───
+  const hasAny = results.downloadUrls.length > 0 || results.streamUrls.length > 0;
+  if (hasAny) {
+    if (procMsgId) {
       await sendResult(procMsgId, results);
     } else {
+      // No message to edit — send new message with results
+      await sendNewResult(results);
+    }
+  } else {
+    if (procMsgId) {
       await tgEdit(
         procMsgId,
         `⚠️ <b>URL বের করা যায়নি</b>\n\n` +
@@ -258,7 +267,14 @@ async function main() {
         `🔗 <a href="${escHtml(MOVIE_URL)}">ব্রাউজারে খুলুন</a>`,
         { parse_mode: "HTML" }
       );
+    } else {
+      await tgSend(
+        `⚠️ <b>URL বের করা যায়নি</b>\n\n` +
+        `🔗 <a href="${escHtml(MOVIE_URL)}">ব্রাউজারে খুলুন</a>`,
+        { parse_mode: "HTML" }
+      );
     }
+  }
   } catch (err) {
     console.error("Fatal:", err);
     try { await browser.close(); } catch {}
@@ -277,10 +293,6 @@ async function main() {
 async function extractFromNewsmonth(browser, newsmonthUrl) {
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 720 });
-  await page.evaluateOnNewDocument(() => {
-    const fakeWindow = { closed: false, focus: () => {}, close: () => {} };
-    window.open = () => fakeWindow;
-  });
   await page.setUserAgent(
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -679,6 +691,51 @@ async function sendResult(messageId, results) {
   }
 
   await tgEdit(messageId, msg, {
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+    reply_markup: { inline_keyboard: keyboard },
+  });
+}
+
+// Send results as new message (when no Worker message to edit)
+async function sendNewResult(results) {
+  const { downloadUrls, streamUrls } = results;
+
+  let msg = `✅ <b>URLs Found!</b>\n\n`;
+
+  if (streamUrls.length > 0) {
+    msg += `▶️ <b>Streaming URLs:</b>\n`;
+    for (const s of streamUrls) {
+      msg += `<code>${escHtml(safeUrl(s.url))}</code> (${s.host})\n`;
+    }
+    msg += `\n`;
+  }
+
+  if (downloadUrls.length > 0) {
+    msg += `⬇️ <b>Download URLs:</b>\n`;
+    for (const u of downloadUrls.slice(0, 3)) {
+      msg += `<code>${escHtml(safeUrl(u))}</code>\n`;
+    }
+  }
+
+  const keyboard = [];
+  if (streamUrls.length > 0) {
+    const bestStream = streamUrls[0].url;
+    const cleanUrl = bestStream.replace(/^https?:\/\//, "");
+    keyboard.push([
+      { text: "▶️ MX Player", url: safeUrl(`intent://${cleanUrl}#Intent;package=com.mxtech.videoplayer.ad;end`, 400) },
+      { text: "▶️ VLC", url: safeUrl(`vlc://${bestStream}`) },
+    ]);
+    keyboard.push([{ text: "⬇️ Stream Download", url: safeUrl(bestStream) }]);
+  }
+  for (const u of downloadUrls.slice(0, 3)) {
+    keyboard.push([{ text: `⬇️ ${getHost(u)}`, url: safeUrl(u) }]);
+  }
+  if (keyboard.length === 0) {
+    keyboard.push([{ text: "🌐 Open Movie", url: MOVIE_URL }]);
+  }
+
+  await tgSend(msg, {
     parse_mode: "HTML",
     disable_web_page_preview: true,
     reply_markup: { inline_keyboard: keyboard },
