@@ -1,0 +1,157 @@
+name: Extract Video URL v5
+
+# ─── Triggers ────────────────────────────────────────────────────
+on:
+  repository_dispatch:
+    types: [extract_video]
+  workflow_dispatch:
+    inputs:
+      movie_url:
+        description: 'krx18 movie URL (e.g. https://krx18.com/movies/85947-...)'
+        required: true
+      newsmonth_url:
+        description: 'newsmonth.today URL (for download extraction)'
+        required: false
+      chat_id:
+        description: 'Telegram chat ID to send result to'
+        required: true
+      message_id:
+        description: 'Telegram message ID to reply to (optional)'
+        required: false
+      server:
+        description: 'Server (1 = playkrx18, 2 = mov18plus)'
+        required: false
+        default: '1'
+
+# ─── Permissions ─────────────────────────────────────────────────
+permissions:
+  contents: read
+
+# ─── Concurrency ─────────────────────────────────────────────────
+concurrency:
+  group: extract-${{ github.event.client_payload.movie_url || inputs.movie_url }}
+  cancel-in-progress: false
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # ─── 1. Checkout ───
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      # ─── 2. Setup Node.js 22 (LTS) ───
+      - name: 🟢 Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: extractor/package-lock.json
+
+      # ─── 3. Install npm dependencies (from lockfile) ───
+      - name: 📦 Install dependencies
+        working-directory: extractor
+        run: npm ci --no-audit --no-fund
+
+      # ─── 4. Cache Chromium (speed up runs) ───
+      - name: 💾 Cache Puppeteer Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-v25
+          restore-keys: puppeteer-${{ runner.os }}-
+
+      # ─── 5. Install Chromium system dependencies ───
+      - name: 🔧 Install Chromium system libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libgbm1 \
+            libasound2t64 \
+            libatk1.0-0t64 \
+            libatk-bridge2.0-0t64 \
+            libcups2t64 \
+            libdrm2 \
+            libxkbcommon0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxrandr2 \
+            libxfixes3 \
+            libpango-1.0-0 \
+            libcairo2 \
+            libnss3 \
+            libnspr4 \
+            libgtk-3-0t64 \
+            libxshmfence1
+
+      # ─── 6. Verify Puppeteer ───
+      - name: ✅ Verify Puppeteer + Chromium
+        working-directory: extractor
+        run: |
+          echo "Node: $(node --version)"
+          echo "npm: $(npm --version)"
+          node -e "
+            const p = require('puppeteer');
+            console.log('Puppeteer: OK');
+            console.log('Chromium:', p.executablePath());
+          "
+
+      # ─── 7. Run extractor ───
+      - name: 🎬 Extract video URL
+        env:
+          MOVIE_URL: ${{ github.event.client_payload.movie_url || inputs.movie_url }}
+          NEWSMONTH_URL: ${{ github.event.client_payload.newsmonth_url || inputs.newsmonth_url || '' }}
+          CHAT_ID: ${{ github.event.client_payload.chat_id || inputs.chat_id }}
+          MESSAGE_ID: ${{ github.event.client_payload.message_id || inputs.message_id }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          SERVER: ${{ github.event.client_payload.server || inputs.server || '1' }}
+          PUPPETEER_EXECUTABLE_PATH: ${{ env.PUPPETEER_EXECUTABLE_PATH }}
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false'
+        working-directory: extractor
+        run: |
+          set +e
+          echo "=== KRX18 Extractor v5 ==="
+          echo "Movie: $MOVIE_URL"
+          echo "Newsmonth: ${NEWSMONTH_URL:-(none)}"
+          echo "Server: $SERVER"
+          echo "Chat: $CHAT_ID"
+          echo ""
+          node index.js
+          EXIT=$?
+          echo ""
+          echo "=== Exit: $EXIT ==="
+          if [ $EXIT -ne 0 ]; then
+            echo "::warning::Attempt 1 failed (exit $EXIT). Retrying in 5s..."
+            sleep 5
+            echo "=== Retry ==="
+            node index.js
+            EXIT=$?
+            echo "=== Retry exit: $EXIT ==="
+          fi
+          exit $EXIT
+
+      # ─── 8. Upload logs ───
+      - name: 📋 Upload extraction logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ github.run_id }}
+          path: extractor/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # ─── 9. Summary ───
+      - name: 📊 Job summary
+        if: always()
+        run: |
+          echo "## 🎬 KRX18 Extraction Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Movie | \`${{ github.event.client_payload.movie_url || inputs.movie_url }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Server | ${{ github.event.client_payload.server || inputs.server || '1' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Node | $(node --version) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Time | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY

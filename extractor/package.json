@@ -1,0 +1,16 @@
+{
+  "name": "krx18-extractor",
+  "version": "5.1.0",
+  "private": true,
+  "description": "KRX18 video URL extractor — Puppeteer 25 + stealth + adblocker",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "puppeteer": "^25.3.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "puppeteer-extra-plugin-adblocker": "^2.13.6"
+  }
+}
