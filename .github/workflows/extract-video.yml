@@ -98,7 +98,7 @@ jobs:
             console.log('Chromium:', p.executablePath());
           "
 
-      # ─── 7. Run extractor ───
+      # ─── 7. Run extractor with debug ───
       - name: 🎬 Extract video URL
         env:
           MOVIE_URL: ${{ github.event.client_payload.movie_url || inputs.movie_url }}
@@ -109,16 +109,18 @@ jobs:
           SERVER: ${{ github.event.client_payload.server || inputs.server || '1' }}
           PUPPETEER_EXECUTABLE_PATH: ${{ env.PUPPETEER_EXECUTABLE_PATH }}
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false'
+          NODE_OPTIONS: '--unhandled-rejections=warn'
         working-directory: extractor
         run: |
-          set +e
-          echo "=== KRX18 Extractor v5 ==="
+          echo "=== KRX18 Extractor ==="
           echo "Movie: $MOVIE_URL"
           echo "Newsmonth: ${NEWSMONTH_URL:-(none)}"
           echo "Server: $SERVER"
           echo "Chat: $CHAT_ID"
+          echo "Node: $(node --version)"
+          echo "Puppeteer: $(node -e 'console.log(require("puppeteer/package.json").version)')"
           echo ""
-          node index.js
+          node index.js 2>&1
           EXIT=$?
           echo ""
           echo "=== Exit: $EXIT ==="
@@ -126,10 +128,11 @@ jobs:
             echo "::warning::Attempt 1 failed (exit $EXIT). Retrying in 5s..."
             sleep 5
             echo "=== Retry ==="
-            node index.js
+            node index.js 2>&1
             EXIT=$?
             echo "=== Retry exit: $EXIT ==="
           fi
+          echo "=== Full stdout/stderr above ==="
           exit $EXIT
 
       # ─── 8. Upload logs ───

@@ -19,6 +19,16 @@
  * 10 bugs fixed from v4 carried over.
  */
 
+// ─── Global error handlers ─────────────────────────────────────
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("UNHANDLED REJECTION:", reason instanceof Error ? reason.message : reason);
+  console.error("Stack:", reason instanceof Error ? reason.stack : "");
+});
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err.message);
+  console.error("Stack:", err.stack);
+});
+
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const AdblockerPlugin = require("puppeteer-extra-plugin-adblocker");
@@ -37,7 +47,7 @@ const CHAT_ID = process.env.CHAT_ID;
 
 const FILE_HOST_RE = /(?:k2s\.cc|nitroflare|alterupload|1fichier|keep2share|rapidgator)/i;
 const VIDEO_EXT_RE = /\.(mp4|m3u8|mkv|webm|ts|avi|mov)(\?|$)/i;
-const OVERALL_TIMEOUT_MS = 8 * 60 * 1000;
+const OVERALL_TIMEOUT_MS = 9 * 60 * 1000;
 
 // ─── Telegram ───────────────────────────────────────────────────
 
@@ -146,22 +156,24 @@ async function main() {
     procMsgId = procMsg?.result?.message_id;
   }
 
-  // Overall timeout
-  const timeoutId = setTimeout(async () => {
-    console.error("Overall timeout!");
-    await tgEdit(
+  // Overall timeout — avoids process.exit(1) which masks real errors
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    console.error("Overall timeout reached (9 min)!");
+    tgEdit(
       procMsgId,
-      `⚠️ <b>Timeout!</b>\n\n৮ মিনিটে URL বের করা যায়নি।\n` +
+      `⚠️ <b>Timeout!</b>\n\n৯ মিনিটে URL বের করা যায়নি।\n` +
       `🔗 <a href="${escHtml(MOVIE_URL)}">ব্রাউজারে খুলুন</a>`,
       { parse_mode: "HTML" }
     ).catch(() => {});
-    process.exit(1);
   }, OVERALL_TIMEOUT_MS);
 
   const browser = await launchBrowser();
   const results = { downloadUrls: [], streamUrls: [] };
 
   try {
+    if (timedOut) return;
     // ─── Step 1: newsmonth 3-click → file host URLs ───
     if (NEWSMONTH_URL) {
       await tgEdit(
@@ -743,6 +755,6 @@ async function sendNewResult(results) {
 }
 
 main().catch((e) => {
-  console.error("Fatal:", e);
-  process.exit(1);
+  console.error("Fatal in main():", e.message);
+  console.error("Stack:", e.stack);
 });
