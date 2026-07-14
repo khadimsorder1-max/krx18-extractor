@@ -67,6 +67,8 @@ export default {
       if (url.pathname === "/api/latest") return handleApiLatest(env, config, url);
       if (url.pathname === "/api/movie") return handleApiMovie(env, config, url);
       if (url.pathname === "/api/search") return handleApiSearch(env, config, url);
+      if (url.pathname === "/api/cache_stream") return handleApiCacheStream(request, env, config);
+      if (url.pathname === "/api/extract") return handleApiExtract(request, env, config, url, reqId, ctx);
 
       if (url.pathname === "/" || url.pathname === "") return handleStatusPage(url, env, config);
       if (url.pathname === "/webapp.html" && env.ASSETS) return env.ASSETS.fetch(`https://${url.host}/index.html`);
@@ -244,7 +246,15 @@ async function handleApiMovie(env, config, url) {
       details.movieUrl = `${CONSTANTS.KRX_BASE}/movies/${slug}/`;
       await cache.setJson(config.cacheKv, cacheKey, details, CONSTANTS.CACHE_TTL * 4);
     }
-    return jsonResponse({ ok: true, ...details }, 200, { "Cache-Control": "public, max-age=300, s-maxage=1800" });
+    let streamUrl = null;
+    if (config.cacheKv) {
+      streamUrl = await config.cacheKv.get(`stream:${slug}`);
+      if (streamUrl && config.proxyWorkerUrl) {
+        const b64 = btoa(streamUrl).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        streamUrl = `${config.proxyWorkerUrl.replace(/\/$/, "")}/proxy/${b64}`;
+      }
+    }
+    return jsonResponse({ ok: true, ...details, streamUrl }, 200, { "Cache-Control": "public, max-age=300, s-maxage=1800" });
   } catch (e) {
     return jsonResponse({ ok: false, error: "Movie API error: " + String(e).slice(0, 100) }, 500);
   }
@@ -330,3 +340,41 @@ function handleStatusPage(url, env, config) {
     { headers: { "Content-Type": "text/plain" } }
   );
 }
+
+// ─── API cache_stream / extract ──────────────────────────────────────
+async function handleApiCacheStream(request, env, config) {
+  if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader || authHeader !== `Bearer ${config.botToken}`) {
+    return jsonResponse({ ok: false, error: "Unauthorized" }, 401);
+  }
+  let body;
+  try { body = await request.json(); }
+  catch { return jsonResponse({ ok: false, error: "Invalid JSON" }, 400); }
+
+  const { slug, streamUrl } = body;
+  if (!slug || !streamUrl) return jsonResponse({ ok: false, error: "Missing parameters" }, 400);
+
+  if (config.cacheKv) {
+    await config.cacheKv.put(`stream:${slug}`, streamUrl, { expirationTtl: 60 * 60 * 24 });
+  }
+  return jsonResponse({ ok: true });
+}
+
+async function handleApiExtract(request, env, config, url, reqId, ctx) {
+  if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+  let body;
+  try { body = await request.json(); }
+  catch { return jsonResponse({ ok: false, error: "Invalid JSON" }, 400); }
+
+  const { slug, userId, server } = body;
+  if (!slug) return jsonResponse({ ok: false, error: "Missing slug" }, 400);
+
+  const targetServer = server || "2";
+  const chatId = userId || config.adminChatId;
+  const workerUrl = `${url.protocol}//${url.host}`;
+
+  ctx.waitUntil(handleDirectStream(config, chatId, slug, targetServer, userId, reqId, workerUrl));
+  return jsonResponse({ ok: true });
+}
+

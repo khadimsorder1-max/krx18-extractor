@@ -9,7 +9,7 @@
  *  - Premium UI with progress updates
  */
 import { CONSTANTS } from "../config.js";
-import { escapeMd } from "../utils/text.js";
+import { escapeHtml } from "../utils/text.js";
 import { fetchText } from "../utils/fetch.js";
 import { sendMessage, editMessageText } from "../services/telegram.js";
 import { dispatchEvent } from "../services/github.js";
@@ -17,14 +17,14 @@ import { cache } from "../services/cache.js";
 import { parseMovieDetails } from "../parsers/movieDetails.js";
 import * as logger from "../utils/logger.js";
 
-export async function handleDirectStream(config, chatId, slug, server, userId, reqId) {
+export async function handleDirectStream(config, chatId, slug, server, userId, reqId, workerUrl) {
   const movieUrl = `${CONSTANTS.KRX_BASE}/movies/${slug}/`;
 
   if (!config.githubToken || !config.githubRepo) {
     await sendMessage(
       config.botToken, chatId,
-      "❌ Direct stream configured নন\\!\n\nWorker এ `GITHUB_TOKEN` এবং `GITHUB_REPO` secret set করুন\\.\n\nSetup এর জন্য README দেখুন\\.",
-      { parse_mode: "MarkdownV2" }
+      "❌ Direct stream configured নন!\n\nWorker এ <code>GITHUB_TOKEN</code> এবং <code>GITHUB_REPO</code> secret set করুন。\n\nSetup এর জন্য README দেখুন。",
+      { parse_mode: "HTML" }
     );
     return;
   }
@@ -51,12 +51,12 @@ export async function handleDirectStream(config, chatId, slug, server, userId, r
   // Send processing message with premium animation
   const procMsg = await sendMessage(
     config.botToken, chatId,
-    `⏳ *Direct video URL বের করা হচ্ছে...*\n\n` +
-    `🎬 Server ${escapeMd(server)}\n` +
+    `⏳ <b>Direct video URL বের করা হচ্ছে...</b>\n\n` +
+    `🎬 Server ${escapeHtml(server)}\n` +
     `🔄 GitHub Actions এ Puppeteer trigger করা হচ্ছে...\n` +
-    `⏱️ সময় লাগবে 30\\-90 সেকেন্ড\n\n` +
-    `_এই message টা আপনার edit হবে যখন URL পাওয়া যাবে_`,
-    { parse_mode: "MarkdownV2" }
+    `⏱️ সময় লাগবে 30-90 সেকেন্ড\n\n` +
+    `<i>এই message টা আপনার edit হবে যখন URL পাওয়া যাবে</i>`,
+    { parse_mode: "HTML" }
   );
   const procMessageId = procMsg?.result?.message_id;
   if (!procMessageId) {
@@ -74,25 +74,26 @@ export async function handleDirectStream(config, chatId, slug, server, userId, r
     user_id: String(userId || ""),
     slug,
     proxy_worker_url: config.proxyWorkerUrl || "",
+    worker_url: workerUrl || "",
   }, reqId);
 
   if (result.ok) {
     await editMessageText(
       config.botToken, chatId, procMessageId,
-      `⏳ *Processing...*\n\n` +
-      `✅ GitHub Action triggered\\!\n` +
+      `⏳ <b>Processing...</b>\n\n` +
+      `✅ GitHub Action triggered!\n` +
       `🔄 Puppeteer browser খুলছে...\n` +
-      `🎯 Auto\\-removing ad overlay...\n` +
-      `⏱️ 30\\-90s অপেক্ষা করুন\n\n` +
-      `_URL প্রস্তুত হলে এই message টা আপডেট হবে_`,
-      { parse_mode: "MarkdownV2" }
+      `🎯 Auto-removing ad overlay...\n` +
+      `⏱️ 30-90s অপেক্ষা করুন\n\n` +
+      `<i>URL প্রস্তুত হলে এই message টা আপডেট হবে</i>`,
+      { parse_mode: "HTML" }
     );
   } else {
     logger.warn("GitHub dispatch failed", { error: result.error }, reqId);
     await editMessageText(
       config.botToken, chatId, procMessageId,
-      `❌ GitHub Actions trigger failed\\!\n\n${escapeMd((result.error || "").slice(0, 200))}`,
-      { parse_mode: "MarkdownV2" }
+      `❌ <b>GitHub Actions trigger failed!</b>\n\n${escapeHtml((result.error || "").slice(0, 200))}`,
+      { parse_mode: "HTML" }
     );
   }
 }

@@ -3,7 +3,7 @@
  */
 import { CONSTANTS } from "../config.js";
 import { fetchText } from "../utils/fetch.js";
-import { escapeMd, truncate } from "../utils/text.js";
+import { escapeHtml, truncate } from "../utils/text.js";
 import { sendMessage } from "../services/telegram.js";
 import { cache } from "../services/cache.js";
 import { parseMovieDetails } from "../parsers/movieDetails.js";
@@ -43,7 +43,7 @@ export async function handleSimilar(config, chatId, slug, reqId) {
 
   await sendMessage(
     config.botToken, chatId,
-    `🎭 *Similar movies* \\(${escapeMd(details.genres[0])}\\)`,
-    { parse_mode: "MarkdownV2", reply_markup: { inline_keyboard: keyboard } }
+    `🎭 <b>Similar movies</b> (${escapeHtml(details.genres[0])})`,
+    { parse_mode: "HTML", reply_markup: { inline_keyboard: keyboard } }
   );
 }

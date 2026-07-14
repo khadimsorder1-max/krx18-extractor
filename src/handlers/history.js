@@ -1,6 +1,6 @@
 /** History handler */
 import { CONSTANTS } from "../config.js";
-import { escapeMd, truncate } from "../utils/text.js";
+import { escapeHtml, truncate } from "../utils/text.js";
 import { sendMessage } from "../services/telegram.js";
 
 export async function handleHistory(config, chatId, userId, reqId) {
@@ -16,8 +16,8 @@ export async function handleHistory(config, chatId, userId, reqId) {
     }
     const keyboard = history.slice(0, 20).map((h) => [{ text: `🎬 ${truncate(h.title, 40)}`, callback_data: `movie:${h.slug}` }]);
     keyboard.push([{ text: "🏠 Home", callback_data: "home" }]);
-    await sendMessage(config.botToken, chatId, `🕐 *Recently Viewed* \\(${history.length}\\)`, {
-      parse_mode: "MarkdownV2",
+    await sendMessage(config.botToken, chatId, `🕐 <b>Recently Viewed</b> (${history.length})`, {
+      parse_mode: "HTML",
       reply_markup: { inline_keyboard: keyboard },
     });
   } catch {

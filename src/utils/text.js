@@ -48,3 +48,14 @@ export function b64decode(s) {
   while (b.length % 4) b += "=";
   return atob(b);
 }
+
+export function escapeHtml(s) {
+  if (!s) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+

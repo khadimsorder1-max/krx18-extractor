@@ -2,9 +2,9 @@
 import { CONSTANTS } from "../config.js";
 import { fetchText } from "../utils/fetch.js";
 import { sendMessage } from "../services/telegram.js";
-import { cache } from "../services/cache.js";
-import { parseMovieList } from "../parsers/movieList.js";
+import { escapeHtml } from "../utils/text.js";
 import * as logger from "../utils/logger.js";
+import { parseMovieList } from "../parsers/movieList.js";
 
 export async function handleScheduled(config) {
   if (!config.cacheKv) return;
@@ -20,10 +20,10 @@ export async function handleScheduled(config) {
     // Notify admin
     if (config.adminChatId) {
       for (const m of newMovies.slice(0, 5)) {
-        const text = `🔔 *New Release\\!*\n\n🎬 ${m.title}\n📅 ${m.releaseDate}\n🎥 ${m.quality || "HD"}`;
+        const text = `🔔 <b>New Release!</b>\n\n🎬 ${escapeHtml(m.title)}\n📅 ${escapeHtml(m.releaseDate || "")}\n🎥 ${escapeHtml(m.quality || "HD")}`;
         const keyboard = [[{ text: "🎬 View", callback_data: `movie:${m.slug}` }]];
         await sendMessage(config.botToken, config.adminChatId, text, {
-          parse_mode: "MarkdownV2",
+          parse_mode: "HTML",
           reply_markup: { inline_keyboard: keyboard },
         }).catch(() => {});
       }

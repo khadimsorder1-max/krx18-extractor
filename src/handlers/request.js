@@ -1,6 +1,6 @@
 /** Request handler — forward request to admin */
 import { CONSTANTS } from "../config.js";
-import { escapeMd } from "../utils/text.js";
+import { escapeHtml } from "../utils/text.js";
 import { sendMessage } from "../services/telegram.js";
 
 export async function handleRequest(config, chatId, name, userId, username) {
@@ -9,12 +9,12 @@ export async function handleRequest(config, chatId, name, userId, username) {
     await sendMessage(config.botToken, chatId, `❌ Request too long (max ${CONSTANTS.MAX_REQUEST_TEXT})`);
     return;
   }
-  await sendMessage(config.botToken, chatId, `📝 আপনার request "${escapeMd(name)}" admin কে পাঠানো হয়েছে\\!`, { parse_mode: "MarkdownV2" });
+  await sendMessage(config.botToken, chatId, `📝 আপনার request "<b>${escapeHtml(name)}</b>" admin কে পাঠানো হয়েছে!`, { parse_mode: "HTML" });
   if (config.adminChatId) {
     await sendMessage(
       config.botToken, config.adminChatId,
-      `📝 *New Request*\n\n🎬 ${escapeMd(name)}\n👤 ${escapeMd(username || String(userId || "unknown"))}\n🆔 ${escapeMd(String(userId))}`,
-      { parse_mode: "MarkdownV2" }
+      `📝 <b>New Request</b>\n\n🎬 ${escapeHtml(name)}\n👤 ${escapeHtml(username || String(userId || "unknown"))}\n🆔 <code>${escapeHtml(String(userId))}</code>`,
+      { parse_mode: "HTML" }
     );
   }
 }

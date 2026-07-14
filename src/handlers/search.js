@@ -3,7 +3,7 @@
  */
 import { CONSTANTS } from "../config.js";
 import { fetchText } from "../utils/fetch.js";
-import { escapeMd, truncate } from "../utils/text.js";
+import { escapeHtml, truncate } from "../utils/text.js";
 import { sendMessage } from "../services/telegram.js";
 import { cache } from "../services/cache.js";
 import { parseMovieList } from "../parsers/movieList.js";
@@ -26,7 +26,7 @@ export async function handleSearch(config, chatId, query, reqId) {
     await cache.setJson(config.cacheKv, cacheKey, movies, CONSTANTS.CACHE_TTL);
   }
   if (movies.length === 0) {
-    await sendMessage(config.botToken, chatId, `❌ "${escapeMd(query)}" এর জন্য কোনো movie পাওয়া যায়নি`, { parse_mode: "MarkdownV2" });
+    await sendMessage(config.botToken, chatId, `❌ "<b>${escapeHtml(query)}</b>" এর জন্য কোনো movie পাওয়া যায়নি`, { parse_mode: "HTML" });
     return;
   }
 
@@ -34,8 +34,8 @@ export async function handleSearch(config, chatId, query, reqId) {
   keyboard.push([{ text: "🏠 Home", callback_data: "home" }]);
   await sendMessage(
     config.botToken, chatId,
-    `🔍 *Search results for "${escapeMd(query)}"* \\(${movies.length}\\)`,
-    { parse_mode: "MarkdownV2", reply_markup: { inline_keyboard: keyboard } }
+    `🔍 <b>Search results for "${escapeHtml(query)}"</b> (${movies.length})`,
+    { parse_mode: "HTML", reply_markup: { inline_keyboard: keyboard } }
   );
 }
 

@@ -3,7 +3,7 @@
  */
 import { CONSTANTS, FILTERS } from "../config.js";
 import { fetchText } from "../utils/fetch.js";
-import { escapeMd, truncate } from "../utils/text.js";
+import { escapeHtml, truncate } from "../utils/text.js";
 import { sendMessage } from "../services/telegram.js";
 import { cache } from "../services/cache.js";
 import { parseMovieList, filterMovies } from "../parsers/movieList.js";
@@ -63,16 +63,16 @@ export async function handleLatest(config, chatId, page = 1, filter = null, reqI
     { text: "⭐ Favs", callback_data: "favs" },
   ]);
 
-  await sendMessage(config.botToken, chatId, `📖 *Page ${page}* — more movies:`, {
-    parse_mode: "MarkdownV2",
+  await sendMessage(config.botToken, chatId, `📖 <b>Page ${page}</b> — more movies:`, {
+    parse_mode: "HTML",
     reply_markup: { inline_keyboard: keyboard },
   });
 }
 
 async function sendMovieCard(config, chatId, m) {
-  let caption = `🎬 *${escapeMd(m.title)}*\n\n`;
-  if (m.releaseDate) caption += `📅 ${escapeMd(m.releaseDate)}`;
-  if (m.year) caption += ` • ${escapeMd(m.year)}`;
+  let caption = `🎬 <b>${escapeHtml(m.title)}</b>\n\n`;
+  if (m.releaseDate) caption += `📅 ${escapeHtml(m.releaseDate)}`;
+  if (m.year) caption += ` • ${escapeHtml(m.year)}`;
   caption += "\n";
 
   const badges = [];
@@ -82,7 +82,7 @@ async function sendMovieCard(config, chatId, m) {
   const cb = censoredBadge(m.title); if (cb) badges.push(cb);
   if (badges.length > 0) caption += badges.join("  ") + "\n";
 
-  if (m.synopsis) caption += `\n📖 ${escapeMd(truncate(m.synopsis, CONSTANTS.MAX_SYNOPSIS_LEN))}\n`;
+  if (m.synopsis) caption += `\n📖 ${escapeHtml(truncate(m.synopsis, CONSTANTS.MAX_SYNOPSIS_LEN))}\n`;
 
   if (caption.length > CONSTANTS.MAX_CAPTION_LEN) {
     caption = caption.slice(0, CONSTANTS.MAX_CAPTION_LEN - 1) + "…";
@@ -97,7 +97,7 @@ async function sendMovieCard(config, chatId, m) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: chatId, photo: m.poster, caption,
-          parse_mode: "MarkdownV2",
+          parse_mode: "HTML",
           reply_markup: { inline_keyboard: keyboard },
         }),
       });
@@ -105,7 +105,7 @@ async function sendMovieCard(config, chatId, m) {
     } catch {}
   }
   await sendMessage(config.botToken, chatId, caption, {
-    parse_mode: "MarkdownV2",
+    parse_mode: "HTML",
     reply_markup: { inline_keyboard: keyboard },
   });
 }

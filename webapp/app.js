@@ -18,6 +18,7 @@
     heroItem: null, currentMovieSlug: null,
     tg: null, tgUser: null,
     settings: { haptics: true, lowData: false },
+    pollInterval: null, pollCount: 0
   };
 
   const $ = (s) => document.querySelector(s);
@@ -241,7 +242,7 @@
         </div></div>` : ''}
       </div>`;
     const openBtn = $('#openPlayerBtn');
-    if (openBtn) openBtn.addEventListener('click', () => { toast('Use the bot: tap "Watch Online Direct" in Telegram', 'success'); haptic('medium'); });
+    if (openBtn) openBtn.addEventListener('click', () => { openPlayerSheet(m.streamUrl, m.title, m.quality, m.slug); });
     const favBtn = $('#favBtn');
     if (favBtn) favBtn.addEventListener('click', () => toggleFav(m, favBtn));
   }
@@ -255,7 +256,7 @@
     ls.set('krx18.favs', favs);
   }
 
-  function closeModal() { dom.modal.hidden = true; dom.modal.setAttribute('aria-hidden', 'true'); document.body.style.overflow = ''; state.currentMovieSlug = null; dom.modalBody.innerHTML = ''; if (!dom.sheet.hidden || !dom.settingsSheet.hidden) return; showBackButton(false); }
+  function closeModal() { clearInterval(state.pollInterval); dom.modal.hidden = true; dom.modal.setAttribute('aria-hidden', 'true'); document.body.style.overflow = ''; state.currentMovieSlug = null; dom.modalBody.innerHTML = ''; if (!dom.sheet.hidden || !dom.settingsSheet.hidden) return; showBackButton(false); }
 
   function openSettings() {
     haptic('light');
@@ -331,7 +332,130 @@
     }, { passive: true });
   }
 
-  function closeSheet() { dom.sheet.hidden = true; if (dom.modal.hidden && dom.settingsSheet.hidden) { document.body.style.overflow = ''; showBackButton(false); } }
+  function closeSheet() {
+    clearInterval(state.pollInterval);
+    dom.sheet.hidden = true;
+    dom.sheet.setAttribute('aria-hidden', 'true');
+    if (dom.modal.hidden && dom.settingsSheet.hidden) {
+      document.body.style.overflow = '';
+      showBackButton(false);
+    }
+  }
+
+  function openPlayerSheet(streamUrl, title, quality, slug) {
+    haptic('light');
+    dom.sheet.hidden = false;
+    dom.sheet.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    showBackButton(true);
+
+    dom.sheetTitle.textContent = prettyTitle(title);
+    dom.sheetHint.textContent = quality ? `Quality: ${quality}` : '';
+
+    if (streamUrl) {
+      clearInterval(state.pollInterval);
+      const cleanUrl = streamUrl.replace(/^https?:\/\//, "");
+      const mxUrl = `intent://${cleanUrl}#Intent;package=com.mxtech.videoplayer.ad;end`;
+      const vlcUrl = `vlc://${streamUrl}`;
+      const jpUrl = `intent://${cleanUrl}#Intent;package=com.brouken.player;end`;
+      const mpvUrl = `mpv://${streamUrl}`;
+
+      dom.sheetGrid.innerHTML = `
+        <a class="sheet__btn" href="${mxUrl}">
+          <span class="sheet__btn-icon">📱</span>
+          <span>MX Player</span>
+        </a>
+        <a class="sheet__btn" href="${vlcUrl}">
+          <span class="sheet__btn-icon">🧡</span>
+          <span>VLC</span>
+        </a>
+        <a class="sheet__btn" href="${jpUrl}">
+          <span class="sheet__btn-icon">🎬</span>
+          <span>Just Player</span>
+        </a>
+        <a class="sheet__btn" href="${mpvUrl}">
+          <span class="sheet__btn-icon">👽</span>
+          <span>MPV</span>
+        </a>
+        <a class="sheet__btn sheet__btn--primary" href="${streamUrl}" target="_blank" rel="noopener">
+          <span class="sheet__btn-icon">⬇️</span>
+          <span>Download</span>
+        </a>
+      `;
+
+      dom.sheetUrl.value = streamUrl;
+      $('.sheet__url').style.display = 'flex';
+      dom.sheetTip.innerHTML = `💡 <b>MX/VLC Network Stream:</b> Click a player button above to stream directly, or copy the proxy URL below and paste it in your player.`;
+      dom.sheetTip.style.display = 'block';
+    } else {
+      dom.sheetGrid.innerHTML = `
+        <div class="extraction-loading" style="grid-column: 1 / -1; text-align: center; padding: 20px 0;">
+          <div class="splash__spinner" style="margin: 0 auto 16px;"></div>
+          <p style="font-weight: 700; margin-bottom: 8px;">⏳ Generating Premium Link...</p>
+          <p style="font-size: 12px; color: var(--text-2); max-width: 280px; margin: 0 auto; line-height: 1.4;">
+            We are opening a Puppeteer browser via GitHub Actions to bypass overlays and extract the direct abysscdn link. This takes about 30-90 seconds.
+          </p>
+        </div>
+      `;
+      $('.sheet__url').style.display = 'none';
+      dom.sheetTip.style.display = 'none';
+
+      triggerExtraction(slug);
+    }
+  }
+
+  async function triggerExtraction(slug) {
+    clearInterval(state.pollInterval);
+    const userId = state.tgUser ? state.tgUser.id : 0;
+    try {
+      await fetch('/api/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, userId, server: '2' })
+      });
+      
+      state.pollCount = 0;
+      state.pollInterval = setInterval(async () => {
+        state.pollCount++;
+        if (state.pollCount > 25) {
+          clearInterval(state.pollInterval);
+          showExtractionError("Extraction timed out. Please try again.");
+          return;
+        }
+        
+        try {
+          const r = await fetchJson(`${API.movie}?slug=${encodeURIComponent(slug)}`);
+          if (r.streamUrl) {
+            clearInterval(state.pollInterval);
+            toast('Premium URL extracted successfully!', 'success');
+            openPlayerSheet(r.streamUrl, r.title, r.quality, slug);
+          }
+        } catch (e) {
+          console.error("Polling error:", e);
+        }
+      }, 4000);
+      
+    } catch (e) {
+      console.error(e);
+      showExtractionError("Failed to trigger link extraction.");
+    }
+  }
+
+  function showExtractionError(msg) {
+    dom.sheetGrid.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: var(--brand-2);">
+        <p style="font-weight: 700; margin-bottom: 10px;">❌ Extraction Failed</p>
+        <p style="font-size: 12px; color: var(--text-2); margin-bottom: 14px;">${msg}</p>
+        <button class="btn btn--ghost btn--small" id="retryExtractBtn">Retry Extraction</button>
+      </div>
+    `;
+    const retryBtn = $('#retryExtractBtn');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', () => {
+        openPlayerSheet(null, dom.sheetTitle.textContent, dom.sheetHint.textContent, state.currentMovieSlug);
+      });
+    }
+  }
 
   function init() {
     cacheDom();

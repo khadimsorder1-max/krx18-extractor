@@ -2,7 +2,7 @@
  * Favorites handler — KV-backed per-user watchlist.
  */
 import { CONSTANTS } from "../config.js";
-import { escapeMd } from "../utils/text.js";
+import { escapeHtml } from "../utils/text.js";
 import { sendMessage } from "../services/telegram.js";
 import { qualityBadge } from "../utils/badges.js";
 
@@ -11,6 +11,15 @@ export async function handleAddFavorite(config, chatId, slug, title, userId) {
     await sendMessage(config.botToken, chatId, "❌ Favorites KV configured নন");
     return;
   }
+  let movieTitle = title;
+  if (!movieTitle) {
+    try {
+      const details = await config.cacheKv.get(`movie:${slug}`, { type: "json" });
+      if (details) movieTitle = details.title;
+    } catch {}
+  }
+  if (!movieTitle) movieTitle = slug;
+
   const key = `favs:${userId}`;
   try {
     const favs = (await config.cacheKv.get(key, { type: "json" })) || [];
@@ -22,9 +31,9 @@ export async function handleAddFavorite(config, chatId, slug, title, userId) {
       await sendMessage(config.botToken, chatId, `❌ Watchlist পূর্ণ (max ${CONSTANTS.MAX_FAVS})`);
       return;
     }
-    favs.push({ slug, title, addedAt: Date.now() });
+    favs.push({ slug, title: movieTitle, addedAt: Date.now() });
     await config.cacheKv.put(key, JSON.stringify(favs), { expirationTtl: CONSTANTS.FAV_TTL });
-    await sendMessage(config.botToken, chatId, `⭐ *${escapeMd(title)}* watchlist এ added হয়েছে`, { parse_mode: "MarkdownV2" });
+    await sendMessage(config.botToken, chatId, `⭐ <b>${escapeHtml(movieTitle)}</b> watchlist এ added হয়েছে`, { parse_mode: "HTML" });
   } catch (e) {
     await sendMessage(config.botToken, chatId, "❌ Favorite add করা যায়নি");
   }
@@ -44,8 +53,8 @@ export async function handleListFavorites(config, chatId, userId) {
     }
     const keyboard = favs.slice(0, 20).map((f) => [{ text: `🎬 ${f.title.slice(0, 40)}`, callback_data: `movie:${f.slug}` }]);
     keyboard.push([{ text: "🏠 Home", callback_data: "home" }]);
-    await sendMessage(config.botToken, chatId, `⭐ *Your Watchlist* \\(${favs.length}\\)`, {
-      parse_mode: "MarkdownV2",
+    await sendMessage(config.botToken, chatId, `⭐ <b>Your Watchlist</b> (${favs.length})`, {
+      parse_mode: "HTML",
       reply_markup: { inline_keyboard: keyboard },
     });
   } catch {

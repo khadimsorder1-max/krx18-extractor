@@ -197,6 +197,24 @@ async function main() {
 
     const hasAny = results.downloadUrls.length > 0 || results.streamUrls.length > 0;
     if (hasAny) {
+      const WORKER_URL = process.env.WORKER_URL;
+      const SLUG = process.env.SLUG;
+      if (WORKER_URL && SLUG && results.streamUrls.length > 0) {
+        const targetUrl = `${WORKER_URL.replace(/\/$/, "")}/api/cache_stream`;
+        console.log(`Sending stream URL to worker cache: ${targetUrl} for slug: ${SLUG}`);
+        try {
+          await fetch(targetUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${BOT_TOKEN}`
+            },
+            body: JSON.stringify({ slug: SLUG, streamUrl: results.streamUrls[0].url })
+          }).then(res => res.text()).then(txt => console.log("Worker cache response:", txt));
+        } catch (e) {
+          console.error("Failed to send stream URL to worker cache:", e.message);
+        }
+      }
       await sendResult(procMsgId, results);
     } else {
       await tgEdit(procMsgId, `⚠️ <b>URL বের করা যায়নি</b>\n\n🔗 <a href="${escHtml(MOVIE_URL)}">ব্রাউজারে খুলুন</a>`, { parse_mode: "HTML" });

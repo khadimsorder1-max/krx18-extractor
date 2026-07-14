@@ -1,0 +1,29 @@
+name: 🚀 Deploy to Cloudflare Workers
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    name: ⚡ Deploy Workers
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔍 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🚀 Deploy Main Worker & Web App
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+
+      - name: 🚀 Deploy Proxy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: proxy
+          command: deploy

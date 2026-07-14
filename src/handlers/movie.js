@@ -3,7 +3,7 @@
  */
 import { CONSTANTS } from "../config.js";
 import { fetchText } from "../utils/fetch.js";
-import { escapeMd, truncate } from "../utils/text.js";
+import { escapeHtml, truncate } from "../utils/text.js";
 import { sendMessage, sendPhotoOrText } from "../services/telegram.js";
 import { cache } from "../services/cache.js";
 import { recordDownload } from "../services/stats.js";
@@ -39,7 +39,7 @@ export async function handleMovieDetails(config, chatId, slug, userId, reqId) {
   }
 
   const caption = buildCaption(details);
-  await sendPhotoOrText(config.botToken, chatId, details.poster, caption, { parse_mode: "MarkdownV2" });
+  await sendPhotoOrText(config.botToken, chatId, details.poster, caption, { parse_mode: "HTML" });
 
   // Record stats
   if (userId && details.downloads?.length > 0) {
@@ -50,31 +50,31 @@ export async function handleMovieDetails(config, chatId, slug, userId, reqId) {
   const keyboard = buildPremiumKeyboard(details, slug, config);
 
   const dlText =
-    `📥 *Download / Watch Online:*\n\n` +
+    `📥 <b>Download / Watch Online:</b>\n\n` +
     (config.githubToken && config.githubRepo
-      ? `▶️ *Watch Online Direct* — ad\\-free direct \\.mp4 URL \\(30\\-60s অপেক্ষা\\)\n` +
-        `⬇️ *Download* — newsmonth → file host \\(k2s\\.cc / nitroflare / alterupload\\)\n\n` +
+      ? `▶️ <b>Watch Online Direct</b> — ad-free direct .mp4 URL (30-60s অপেক্ষা)\n` +
+        `⬇️ <b>Download</b> — newsmonth → file host (k2s.cc / nitroflare / alterupload)\n\n` +
         `যেটা চাও সেটা select করো:`
-      : `⬇️ *Download links:*\n` +
-        `⚠️ Button চাপলে browser এ newsmonth\\.today খুলবে → সেখানে আসল file host এ যাবে\\.\n\n` +
+      : `⬇️ <b>Download links:</b>\n` +
+        `⚠️ Button চাপলে browser এ newsmonth.today খুলবে → সেখানে আসল file host এ যাবে।\n\n` +
         `যে host চাও সেটা select করো:`);
 
   await sendMessage(config.botToken, chatId, dlText, {
-    parse_mode: "MarkdownV2",
+    parse_mode: "HTML",
     reply_markup: { inline_keyboard: keyboard },
   });
 }
 
 function buildCaption(d) {
-  let cap = `🎬 *${escapeMd(d.title)}*\n`;
-  if (d.koreanTitle) cap += `🇰🇷 ${escapeMd(d.koreanTitle)}\n`;
-  cap += "\n📋 *Info:*\n";
-  if (d.country) cap += `🌍 Country: ${escapeMd(d.country)}\n`;
-  if (d.quality) cap += `🎥 Quality: ${escapeMd(d.quality)}\n`;
-  if (d.releaseDate) cap += `📅 Release: ${escapeMd(d.releaseDate)}\n`;
-  if ((d.genres || []).length > 0) cap += `🎭 Genres: ${escapeMd(d.genres.join(", "))}\n`;
+  let cap = `🎬 <b>${escapeHtml(d.title)}</b>\n`;
+  if (d.koreanTitle) cap += `🇰🇷 <i>${escapeHtml(d.koreanTitle)}</i>\n`;
+  cap += "\n📋 <b>Info:</b>\n";
+  if (d.country) cap += `🌍 Country: ${escapeHtml(d.country)}\n`;
+  if (d.quality) cap += `🎥 Quality: ${escapeHtml(d.quality)}\n`;
+  if (d.releaseDate) cap += `📅 Release: ${escapeHtml(d.releaseDate)}\n`;
+  if ((d.genres || []).length > 0) cap += `🎭 Genres: ${escapeHtml(d.genres.join(", "))}\n`;
   cap += "\n";
-  if ((d.actors || []).length > 0) cap += `👥 *Cast:*\n${escapeMd(d.actors.slice(0, 5).join(", "))}\n\n`;
+  if ((d.actors || []).length > 0) cap += `👥 <b>Cast:</b>\n${escapeHtml(d.actors.slice(0, 5).join(", "))}\n\n`;
 
   // Badges
   const badges = [];
@@ -84,7 +84,7 @@ function buildCaption(d) {
   const cb = censoredBadge(d.title); if (cb) badges.push(cb);
   if (badges.length > 0) cap += buildBadgeLine(badges) + "\n\n";
 
-  if (d.description) cap += `📖 *Synopsis:*\n${escapeMd(truncate(d.description, CONSTANTS.MAX_SYNOPSIS_LEN))}\n`;
+  if (d.description) cap += `📖 <b>Synopsis:</b>\n${escapeHtml(truncate(d.description, CONSTANTS.MAX_SYNOPSIS_LEN))}\n`;
 
   if (cap.length > CONSTANTS.MAX_CAPTION_LEN) cap = cap.slice(0, CONSTANTS.MAX_CAPTION_LEN - 1) + "…";
   return cap;
@@ -109,9 +109,9 @@ function buildPremiumKeyboard(d, slug, config) {
   if (d.trailer) row.push({ text: "▶️ Trailer", url: d.trailer });
   if ((d.genres || []).length > 0) row.push({ text: "🎭 Similar", callback_data: `similar:${slug}` });
   if (row.length > 0) keyboard.push(row);
-  // Favs + history
+  // Favs + history - changed callback_data to addfav:${slug} to prevent 64-byte payload limit overflow
   keyboard.push([
-    { text: "⭐ Favorite", callback_data: `addfav:${slug}:${d.title.slice(0, 40)}` },
+    { text: "⭐ Favorite", callback_data: `addfav:${slug}` },
     { text: "🕐 History", callback_data: `history` },
   ]);
   // Navigation
