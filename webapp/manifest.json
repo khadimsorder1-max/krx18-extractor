@@ -1,0 +1,19 @@
+{
+  "name": "KRX18 Premium",
+  "short_name": "KRX18",
+  "description": "Premium Korean movie streamer with auto-remove ads + direct stream + proxy.",
+  "start_url": "/webapp/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "lang": "en",
+  "categories": ["entertainment", "video"],
+  "icons": [
+    { "src": "/assets/icon-192.webp", "sizes": "192x192", "type": "image/webp", "purpose": "any" },
+    { "src": "/assets/icon-512.webp", "sizes": "512x512", "type": "image/webp", "purpose": "any" },
+    { "src": "/assets/icon-192-maskable.webp", "sizes": "192x192", "type": "image/webp", "purpose": "maskable" },
+    { "src": "/assets/icon-512-maskable.webp", "sizes": "512x512", "type": "image/webp", "purpose": "maskable" }
+  ]
+}

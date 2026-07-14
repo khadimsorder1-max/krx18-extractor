@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <meta name="color-scheme" content="dark" />
+  <title>KRX18 Premium — Mini App</title>
+  <link rel="icon" href="/assets/favicon-32.webp" type="image/webp" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.webp" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="preconnect" href="https://cdnupload.com" crossorigin />
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+</head>
+<body>
+  <div class="splash" id="splash">
+    <img src="/assets/logo-512.webp" alt="KRX18" width="120" height="120" />
+    <div class="splash__title">KRX18</div>
+    <div class="splash__sub">Premium v6</div>
+    <div class="splash__spinner"></div>
+  </div>
+
+  <header class="app-bar">
+    <div class="app-bar__inner">
+      <a href="/" class="brand"><span class="brand__mark">K18</span><span class="brand__text">KRX18</span></a>
+      <form class="search" id="searchForm" role="search" autocomplete="off">
+        <svg class="search__icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9.5 3a6.5 6.5 0 0 1 4.94 10.69l5.43 5.44-1.06 1.06-5.44-5.43A6.5 6.5 0 1 1 9.5 3m0 1.5a5 5 0 1 0 0 10 5 5 0 0 0 0-10"/></svg>
+        <input id="searchInput" class="search__input" type="search" placeholder="Search Korean movies…" aria-label="Search" inputmode="search" enterkeyhint="search" maxlength="120" />
+        <button type="button" class="search__clear" id="searchClear" aria-label="Clear" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.3 5.71 12 12l6.3 6.29-1.42 1.42L12 14.83l-6.29 6.3-1.42-1.42L10.59 12 4.29 5.71 5.71 4.29 12 10.59l6.29-6.3z"/></svg>
+        </button>
+      </form>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.21.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      </button>
+    </div>
+    <div class="filters" id="filters" role="toolbar" aria-label="Filters">
+      <div class="filters__scroll" id="filtersScroll"></div>
+    </div>
+  </header>
+
+  <main id="main" class="main">
+    <section id="hero" class="hero" hidden>
+      <div class="hero__backdrop" id="heroBackdrop"></div>
+      <div class="hero__content">
+        <span class="hero__tag" id="heroTag">🔥 Trending</span>
+        <h1 class="hero__title" id="heroTitle"></h1>
+        <p class="hero__meta" id="heroMeta"></p>
+        <p class="hero__story" id="heroStory"></p>
+        <div class="hero__actions">
+          <button class="btn btn--primary" id="heroPlay">▶ Play</button>
+          <button class="btn btn--ghost" id="heroDetails">Details</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-head">
+      <h2 class="section-head__title" id="sectionTitle">Latest Korean Movies</h2>
+      <span class="section-head__count" id="sectionCount"></span>
+    </div>
+
+    <div class="grid" id="grid" aria-live="polite" aria-busy="true"></div>
+    <div class="load-more" id="loadMore" hidden>
+      <button class="btn btn--ghost" id="loadMoreBtn">Load more</button>
+    </div>
+    <div class="grid" id="skeletonGrid" hidden></div>
+    <div class="empty" id="empty" hidden>
+      <img src="/assets/empty.webp" alt="" width="160" height="120" style="margin:0 auto 14px;display:block;opacity:.8" loading="lazy" decoding="async" />
+      <h3>No movies found</h3>
+      <p>Try a different search or filter.</p>
+    </div>
+  </main>
+
+  <!-- Movie Modal -->
+  <div class="modal" id="modal" hidden aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal__backdrop" data-close></div>
+    <article class="modal__card" id="modalCard">
+      <button class="modal__close" data-close aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.3 5.71 12 12l6.3 6.29-1.42 1.42L12 14.83l-6.29 6.3-1.42-1.42L10.59 12 4.29 5.71 5.71 4.29 12 10.59l6.29-6.3z"/></svg>
+      </button>
+      <div class="modal__body" id="modalBody"><div class="skeleton-modal"></div></div>
+    </article>
+  </div>
+
+  <!-- Player Sheet -->
+  <div class="sheet" id="sheet" hidden aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="sheet__backdrop" data-close-sheet></div>
+    <div class="sheet__panel" id="sheetPanel">
+      <div class="sheet__handle"></div>
+      <h3 class="sheet__title" id="sheetTitle">Open with…</h3>
+      <p class="sheet__hint" id="sheetHint"></p>
+      <div class="sheet__grid" id="sheetGrid"></div>
+      <div class="sheet__url">
+        <input id="sheetUrl" type="text" readonly aria-label="Direct video URL" />
+        <button class="btn btn--small" id="sheetCopy">Copy</button>
+      </div>
+      <p class="sheet__tip" id="sheetTip"></p>
+    </div>
+  </div>
+
+  <!-- Settings Sheet -->
+  <div class="sheet" id="settingsSheet" hidden aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="sheet__backdrop" data-close-settings></div>
+    <div class="sheet__panel">
+      <div class="sheet__handle"></div>
+      <h3 class="sheet__title">⚙️ Settings</h3>
+      <div class="settings-list" id="settingsList"></div>
+      <button class="btn btn--ghost btn--block" data-close-settings>Done</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

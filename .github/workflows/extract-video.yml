@@ -1,0 +1,121 @@
+# KRX18 Extractor v6 — GitHub Actions workflow
+name: Extract Video URL v6
+
+on:
+  repository_dispatch:
+    types: [extract_video]
+  workflow_dispatch:
+    inputs:
+      movie_url:
+        description: 'krx18 movie URL'
+        required: true
+      newsmonth_url:
+        description: 'newsmonth.today URL (optional)'
+        required: false
+      chat_id:
+        description: 'Telegram chat ID'
+        required: true
+      message_id:
+        description: 'Telegram message ID (optional)'
+        required: false
+      server:
+        description: 'Server (1 or 2, default 2)'
+        required: false
+        default: '2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: extract-${{ github.event.client_payload.movie_url || inputs.movie_url }}
+  cancel-in-progress: false
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: extractor/package-lock.json
+
+      - name: 📦 Install dependencies
+        working-directory: extractor
+        run: npm ci --no-audit --no-fund
+
+      - name: 🔧 Install Chromium system libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libgbm1 libasound2t64 libatk1.0-0t64 libatk-bridge2.0-0t64 \
+            libcups2t64 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
+            libxrandr2 libxfixes3 libpango-1.0-0 libcairo2 libnss3 \
+            libnspr4 libgtk-3-0t64 libxshmfence1
+
+      - name: 💾 Cache Puppeteer Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-v25
+          restore-keys: puppeteer-${{ runner.os }}-
+
+      - name: ✅ Verify Puppeteer
+        working-directory: extractor
+        run: |
+          echo "Node: $(node --version)"
+          node -e "const p=require('puppeteer'); console.log('Puppeteer OK:', p.executablePath())"
+
+      - name: 🎬 Extract video URL v6 (auto-remove overlay + abysscdn capture + proxy)
+        env:
+          MOVIE_URL: ${{ github.event.client_payload.movie_url || inputs.movie_url }}
+          NEWSMONTH_URL: ${{ github.event.client_payload.newsmonth_url || inputs.newsmonth_url || '' }}
+          CHAT_ID: ${{ github.event.client_payload.chat_id || inputs.chat_id }}
+          MESSAGE_ID: ${{ github.event.client_payload.message_id || inputs.message_id }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          SERVER: ${{ github.event.client_payload.server || inputs.server || '2' }}
+          PROXY_WORKER_URL: ${{ secrets.PROXY_WORKER_URL }}
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false'
+        working-directory: extractor
+        run: |
+          set +e
+          echo "=== KRX18 Extractor v6 ==="
+          echo "Movie: $MOVIE_URL"
+          echo "Server: $SERVER"
+          echo "Proxy: ${PROXY_WORKER_URL:-(none)}"
+          echo ""
+          node index.js
+          EXIT=$?
+          if [ $EXIT -ne 0 ]; then
+            echo "::warning::Retry in 5s..."
+            sleep 5
+            node index.js
+            EXIT=$?
+          fi
+          exit $EXIT
+
+      - name: 📋 Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ github.run_id }}
+          path: extractor/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: 📊 Summary
+        if: always()
+        run: |
+          echo "## 🎬 Extraction Summary (v6)" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Movie | \`${{ github.event.client_payload.movie_url || inputs.movie_url }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Server | ${{ github.event.client_payload.server || inputs.server || '2' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Node | $(node --version) |" >> $GITHUB_STEP_SUMMARY

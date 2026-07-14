@@ -1,0 +1,37 @@
+# KRX18 Premium Bot v6 — Cloudflare Worker config
+name = "krx18-korea-bot"
+main = "src/index.js"
+compatibility_date = "2024-10-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+# Optional KV namespace for caching + favorites + history
+# Create with: wrangler kv namespace create CACHE_KV
+[[kv_namespaces]]
+binding = "CACHE_KV"
+id = "a715f496734f4b7ebab429943b673553"
+
+# Secrets (DO NOT put values here):
+#   wrangler secret put BOT_TOKEN
+#   wrangler secret put ADMIN_CHAT_ID
+#   wrangler secret put WEBHOOK_SECRET
+#   wrangler secret put GITHUB_TOKEN
+#   wrangler secret put GITHUB_REPO  (e.g. yourname/krx18-extractor)
+#   wrangler secret put PROXY_WORKER_URL  (e.g. https://krx18-proxy.xxx.workers.dev)
+#   wrangler secret put WEBAPP_URL  (e.g. https://krx18-bot.xxx.workers.dev/)
+
+[vars]
+ENV = "production"
+
+[observability]
+enabled = true
+
+# Auto-notify cron (every 30 min)
+[triggers]
+crons = ["*/30 * * * *"]
+
+[assets]
+directory = "./webapp"
+binding = "ASSETS"
+serve_directly = true
+

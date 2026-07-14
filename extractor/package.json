@@ -1,0 +1,17 @@
+{
+  "name": "krx18-extractor-v6",
+  "version": "6.0.0",
+  "private": true,
+  "description": "KRX18 video URL extractor v6 — auto-remove ad overlay, capture abysscdn CDN URL, generate proxy URL for MX Player/VLC",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo 'No tests yet' && exit 0"
+  },
+  "dependencies": {
+    "puppeteer": "^22.0.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "puppeteer-extra-plugin-adblocker": "^2.13.1"
+  }
+}

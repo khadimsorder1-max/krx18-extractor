@@ -1,0 +1,22 @@
+{
+  "name": "krx18-premium-bot",
+  "version": "6.0.0",
+  "description": "KRX18 Premium Bot v6 — premium Korean movie bot with auto-remove ads, direct stream, proxy, TG Mini App",
+  "main": "src/index.js",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "setup": "wrangler deploy && echo 'Now visit: https://<your-worker>.workers.dev/setup?token=<BOT_TOKEN>&webhook=1'",
+    "deploy:proxy": "cd proxy && wrangler deploy",
+    "deploy:all": "wrangler deploy && cd proxy && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
