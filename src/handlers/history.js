@@ -4,7 +4,7 @@ import { escapeMd, truncate } from "../utils/text.js";
 import { sendMessage } from "../services/telegram.js";
 
 export async function handleHistory(config, chatId, userId, reqId) {
-  if (!userId || !config.cacheKv) {
+  if (userId == null || !config.cacheKv) {
     await sendMessage(config.botToken, chatId, "❌ History KV configured নন");
     return;
   }

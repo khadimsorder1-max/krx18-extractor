@@ -273,10 +273,16 @@ async function tryDooplayer(browser, postId, movieUrl, server) {
         console.log("Fallback: no iframe URLs found on movie page");
         // Try direct API call via fetch instead of page.goto
         try {
-          const apiResp = await fallbackPage.goto(apiUrl, { waitUntil: "domcontentloaded", timeout: 15000 });
-          const apiText = await apiResp.text();
-          const d = JSON.parse(apiText);
-          if (d.embed_url && d.embed_url !== "null") iframeUrl = d.embed_url;
+          const apiResp = await fallbackPage.goto(apiUrl, { waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => null);
+          if (apiResp) {
+            const apiText = await apiResp.text();
+            try {
+              const d = JSON.parse(apiText);
+              if (d.embed_url && d.embed_url !== "null") iframeUrl = d.embed_url;
+            } catch {
+              console.log("Fallback API returned non-JSON");
+            }
+          }
         } catch {
           console.log("Direct API call also failed");
         }

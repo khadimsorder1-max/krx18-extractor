@@ -59,6 +59,10 @@ export async function handleDirectStream(config, chatId, slug, server, userId, r
     { parse_mode: "MarkdownV2" }
   );
   const procMessageId = procMsg?.result?.message_id;
+  if (!procMessageId) {
+    logger.warn("Failed to send processing message", { procMsg }, reqId);
+    return;
+  }
 
   // Trigger GitHub Action
   const result = await dispatchEvent(config, "extract_video", {

@@ -7,7 +7,7 @@ import { sendMessage } from "../services/telegram.js";
 import { qualityBadge } from "../utils/badges.js";
 
 export async function handleAddFavorite(config, chatId, slug, title, userId) {
-  if (!userId || !config.cacheKv) {
+  if (userId == null || !config.cacheKv) {
     await sendMessage(config.botToken, chatId, "❌ Favorites KV configured নন");
     return;
   }
@@ -31,7 +31,7 @@ export async function handleAddFavorite(config, chatId, slug, title, userId) {
 }
 
 export async function handleListFavorites(config, chatId, userId) {
-  if (!userId || !config.cacheKv) {
+  if (userId == null || !config.cacheKv) {
     await sendMessage(config.botToken, chatId, "❌ Favorites KV configured নন");
     return;
   }
@@ -54,7 +54,7 @@ export async function handleListFavorites(config, chatId, userId) {
 }
 
 export async function handleRemoveFavorite(config, chatId, slug, userId) {
-  if (!userId || !config.cacheKv) return;
+  if (userId == null || !config.cacheKv) return;
   const key = `favs:${userId}`;
   try {
     const favs = (await config.cacheKv.get(key, { type: "json" })) || [];

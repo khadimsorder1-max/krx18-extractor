@@ -12,7 +12,7 @@
  */
 import { CONSTANTS, validateEnv, FILTERS } from "./config.js";
 import { newReqId, info, error } from "./utils/logger.js";
-import { fetchBinary } from "./utils/fetch.js";
+import { fetchBinary, fetchText } from "./utils/fetch.js";
 import { b64decode } from "./utils/text.js";
 
 import { checkWebhookSecret } from "./middleware/webhook.js";
@@ -31,6 +31,10 @@ import { handleStats } from "./handlers/stats.js";
 import { handleHistory } from "./handlers/history.js";
 import { handleScheduled } from "./handlers/notify.js";
 import { sendMessage, answerCallback, setMyCommands, setChatMenuButton, setWebhook } from "./services/telegram.js";
+
+import { parseMovieList, filterMovies } from "./parsers/movieList.js";
+import { parseMovieDetails } from "./parsers/movieDetails.js";
+import { cache } from "./services/cache.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -66,7 +70,9 @@ export default {
 
       if (url.pathname === "/" || url.pathname === "") return handleStatusPage(url, env, config);
       if (url.pathname === "/webapp.html" && env.ASSETS) return env.ASSETS.fetch(`https://${url.host}/index.html`);
-      return new Response("Not found", { status: 404 });
+      return new Response(JSON.stringify({ ok: false, error: "Not found" }), {
+        status: 404, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      });
     } catch (e) {
       error("Unhandled error", { path: url.pathname, error: String(e) }, reqId);
       return new Response(JSON.stringify({ ok: false, error: "Internal error" }), {
@@ -209,9 +215,6 @@ async function handleApiLatest(env, config, url) {
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
   const filter = (url.searchParams.get("filter") || "").trim() || null;
   try {
-    const { fetchText } = await import("./utils/fetch.js");
-    const { parseMovieList, filterMovies } = await import("./parsers/movieList.js");
-    const { cache } = await import("./services/cache.js");
     const cacheKey = `latest_p${page}_${filter || "all"}`;
     let movies = await cache.getJson(config.cacheKv, cacheKey);
     if (!movies) {
@@ -232,9 +235,6 @@ async function handleApiMovie(env, config, url) {
   const slug = (url.searchParams.get("slug") || "").trim();
   if (!slug) return jsonResponse({ ok: false, error: "Missing slug" }, 400);
   try {
-    const { fetchText } = await import("./utils/fetch.js");
-    const { parseMovieDetails } = await import("./parsers/movieDetails.js");
-    const { cache } = await import("./services/cache.js");
     const cacheKey = `movie:${slug}`;
     let details = await cache.getJson(config.cacheKv, cacheKey);
     if (!details) {
@@ -254,9 +254,6 @@ async function handleApiSearch(env, config, url) {
   const q = (url.searchParams.get("q") || "").trim();
   if (!q) return jsonResponse({ ok: true, items: [] });
   try {
-    const { fetchText } = await import("./utils/fetch.js");
-    const { parseMovieList } = await import("./parsers/movieList.js");
-    const { cache } = await import("./services/cache.js");
     const cacheKey = `search:${q.toLowerCase()}`;
     let movies = await cache.getJson(config.cacheKv, cacheKey);
     if (!movies) {
@@ -273,8 +270,8 @@ async function handleApiSearch(env, config, url) {
 
 // ─── Setup ──────────────────────────────────────────────────────────
 async function handleSetup(request, env, config, url) {
-  const token = url.searchParams.get("token") || config.botToken;
-  if (!token) return new Response("Missing BOT_TOKEN", { status: 401 });
+  const token = url.searchParams.get("token");
+  if (!token) return jsonResponse({ ok: false, error: "Missing ?token= param" }, 401);
   const host = url.host;
   const webAppUrl = config.webappUrl || `https://${host}/webapp.html`;
   const webhookUrl = config.webhookSecret

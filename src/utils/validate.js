@@ -7,7 +7,7 @@ export function safeCallback(data) {
 }
 
 export function isValidPage(page) {
-  return Number.isInteger(page) && page >= 1 && page <= 1000;
+  return Number.isInteger(page) && page >= 1 && page <= 100;
 }
 
 export function isValidFilter(filter, FILTERS) {

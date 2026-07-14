@@ -41,66 +41,80 @@ const REFERER_MAP = {
   "krx18.com": "https://krx18.com/",
 };
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Allow-Headers": "*",
+  "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges",
+};
+
+function corsResponse(body, status = 200, extra = {}) {
+  return new Response(body, {
+    status,
+    headers: { "Content-Type": typeof body === "string" ? "text/plain" : "application/octet-stream", ...CORS_HEADERS, ...extra },
+  });
+}
+
+function corsJson(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+  });
+}
+
+function isHostAllowed(host) {
+  const h = host.toLowerCase();
+  return ALLOWED_HOSTS.some((allowed) => h === allowed || h.endsWith("." + allowed));
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     // CORS preflight
     if (request.method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-          "Access-Control-Allow-Headers": "*",
-          "Access-Control-Max-Age": "86400",
-        },
-      });
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
     // Health check
     if (url.pathname === "/" || url.pathname === "/health") {
-      return new Response(JSON.stringify({
+      return corsJson({
         ok: true,
         service: "krx18-proxy",
-        version: "1.0.0",
+        version: "2.0.0",
         timestamp: new Date().toISOString(),
-      }), { headers: { "Content-Type": "application/json" } });
+      });
     }
 
     // Proxy route: /proxy/<base64url>
     const m = url.pathname.match(/^\/proxy\/([A-Za-z0-9_-]+)$/);
     if (!m) {
-      return new Response("Not found. Use /proxy/<base64url-encoded-url>", { status: 404 });
+      return corsJson({ ok: false, error: "Not found. Use /proxy/<base64url-encoded-url>" }, 404);
     }
 
     let targetUrl;
     try {
-      // base64url decode
       let b64 = m[1].replace(/-/g, "+").replace(/_/g, "/");
       while (b64.length % 4) b64 += "=";
       targetUrl = atob(b64);
     } catch {
-      return new Response("Invalid base64", { status: 400 });
+      return corsJson({ ok: false, error: "Invalid base64" }, 400);
     }
 
     if (!/^https?:\/\//.test(targetUrl)) {
-      return new Response("Invalid URL", { status: 400 });
+      return corsJson({ ok: false, error: "Invalid URL" }, 400);
     }
 
-    // Check if host is allowed
     let targetHost;
     try { targetHost = new URL(targetUrl).hostname.replace(/^www\./, ""); }
-    catch { return new Response("Invalid URL", { status: 400 }); }
+    catch { return corsJson({ ok: false, error: "Invalid URL" }, 400); }
 
-    const isAllowed = ALLOWED_HOSTS.some((h) => targetHost.includes(h));
-    if (!isAllowed) {
-      return new Response(`Host not allowed: ${targetHost}`, { status: 403 });
+    if (!isHostAllowed(targetHost)) {
+      return corsJson({ ok: false, error: `Host not allowed: ${targetHost}` }, 403);
     }
 
-    // Determine the right Referer
     const referer = REFERER_MAP[targetHost] || "https://krx18.com/";
 
-    // Build the upstream request — pass through Range header for seeking
     const upstreamHeaders = {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       "Accept": "*/*",
@@ -109,7 +123,6 @@ export default {
       "Origin": "https://mov18plus.cloud",
     };
 
-    // Pass through Range header (for video seeking)
     const range = request.headers.get("Range");
     if (range) upstreamHeaders["Range"] = range;
 
@@ -117,21 +130,14 @@ export default {
       const upstreamResp = await fetch(targetUrl, {
         headers: upstreamHeaders,
         redirect: "follow",
-        cf: {
-          cacheTtl: 86400,
-          cacheEverything: true,
-          scrapeShield: false,
-        },
+        cf: { cacheTtl: 86400, cacheEverything: true, scrapeShield: false },
       });
 
-      // Build the response — stream it through
       const respHeaders = new Headers();
-      // Pass through content-type, content-length, content-range, accept-ranges
       for (const h of ["Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "Last-Modified", "ETag"]) {
         const v = upstreamResp.headers.get(h);
         if (v) respHeaders.set(h, v);
       }
-      // CORS + cache
       respHeaders.set("Access-Control-Allow-Origin", "*");
       respHeaders.set("Access-Control-Allow-Headers", "*");
       respHeaders.set("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges");
@@ -144,7 +150,7 @@ export default {
         headers: respHeaders,
       });
     } catch (e) {
-      return new Response(`Upstream fetch failed: ${e.message}`, { status: 502 });
+      return corsJson({ ok: false, error: `Upstream fetch failed: ${e.message}` }, 502);
     }
   },
 };

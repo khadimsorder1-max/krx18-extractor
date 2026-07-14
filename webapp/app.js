@@ -141,7 +141,7 @@
     </article>`;
   }
   function renderGrid() {
-    if (state.items.length === 0) { dom.grid.innerHTML = ''; dom.empty.hidden = !state.isLoading; return; }
+    if (state.items.length === 0) { dom.grid.innerHTML = ''; dom.empty.hidden = state.isLoading ? true : false; return; }
     dom.grid.innerHTML = state.items.map(cardHtml).join('');
     dom.empty.hidden = true;
     dom.loadMore.hidden = !state.hasMore || state.items.length < 6;

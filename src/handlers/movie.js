@@ -72,14 +72,14 @@ function buildCaption(d) {
   if (d.country) cap += `🌍 Country: ${escapeMd(d.country)}\n`;
   if (d.quality) cap += `🎥 Quality: ${escapeMd(d.quality)}\n`;
   if (d.releaseDate) cap += `📅 Release: ${escapeMd(d.releaseDate)}\n`;
-  if (d.genres.length > 0) cap += `🎭 Genres: ${escapeMd(d.genres.join(", "))}\n`;
+  if ((d.genres || []).length > 0) cap += `🎭 Genres: ${escapeMd(d.genres.join(", "))}\n`;
   cap += "\n";
-  if (d.actors.length > 0) cap += `👥 *Cast:*\n${escapeMd(d.actors.slice(0, 5).join(", "))}\n\n`;
+  if ((d.actors || []).length > 0) cap += `👥 *Cast:*\n${escapeMd(d.actors.slice(0, 5).join(", "))}\n\n`;
 
   // Badges
   const badges = [];
   const qb = qualityBadge(d.quality); if (qb) badges.push(qb);
-  const lb = languageBadge(d.quality + " " + d.genres.join(" ")); if (lb) badges.push(lb);
+  const lb = languageBadge((d.quality || "") + " " + (d.genres || []).join(" ")); if (lb) badges.push(lb);
   const sb = sourceBadge(d.quality); if (sb) badges.push(sb);
   const cb = censoredBadge(d.title); if (cb) badges.push(cb);
   if (badges.length > 0) cap += buildBadgeLine(badges) + "\n\n";
@@ -100,14 +100,14 @@ function buildPremiumKeyboard(d, slug, config) {
     ]);
   }
   // Download buttons
-  for (const dl of d.downloads) {
+  for (const dl of (d.downloads || [])) {
     const label = dl.quality ? `${dl.quality} (${dl.host})` : `Download (${dl.host})`;
     keyboard.push([{ text: `⬇️ ${label}`, url: dl.url }]);
   }
   // External links
   const row = [];
   if (d.trailer) row.push({ text: "▶️ Trailer", url: d.trailer });
-  if (d.genres.length > 0) row.push({ text: "🎭 Similar", callback_data: `similar:${slug}` });
+  if ((d.genres || []).length > 0) row.push({ text: "🎭 Similar", callback_data: `similar:${slug}` });
   if (row.length > 0) keyboard.push(row);
   // Favs + history
   keyboard.push([

@@ -8,7 +8,7 @@ export async function recordDownload(kv, userId, host) {
     const key = `stats:${today}`;
     const data = (await kv.get(key, { type: "json" })) || { total: 0, hosts: {}, users: {} };
     data.total = (data.total || 0) + 1;
-    data.hosts[host] = (data.hosts[host] || 0) + 1;
+    if (host) data.hosts[host] = (data.hosts[host] || 0) + 1;
     if (userId) data.users[userId] = (data.users[userId] || 0) + 1;
     await kv.put(key, JSON.stringify(data), { expirationTtl: CONSTANTS.STATS_TTL });
   } catch {}

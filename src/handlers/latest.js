@@ -77,7 +77,7 @@ async function sendMovieCard(config, chatId, m) {
 
   const badges = [];
   const qb = qualityBadge(m.quality); if (qb) badges.push(qb);
-  const lb = languageBadge(m.quality + " " + m.genres.join(" ")); if (lb) badges.push(lb);
+  const lb = languageBadge((m.quality || "") + " " + (m.genres || []).join(" ")); if (lb) badges.push(lb);
   const sb = sourceBadge(m.quality); if (sb) badges.push(sb);
   const cb = censoredBadge(m.title); if (cb) badges.push(cb);
   if (badges.length > 0) caption += badges.join("  ") + "\n";
